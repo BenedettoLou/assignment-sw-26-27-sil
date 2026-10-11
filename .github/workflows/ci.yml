@@ -1,0 +1,22 @@
+name: SIL
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: sudo apt-get update && sudo apt-get install --yes ninja-build
+
+      - name: SIL workflow
+        run: cmake --workflow --preset sil

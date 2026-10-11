@@ -1,0 +1,50 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "sil",
+      "displayName": "SIL",
+      "description": "Configure the assignment in its only supported configuration",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/.build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "sil",
+      "configurePreset": "sil"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "sil",
+      "configurePreset": "sil",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "sil",
+      "displayName": "SIL build and test",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "sil"
+        },
+        {
+          "type": "build",
+          "name": "sil"
+        },
+        {
+          "type": "test",
+          "name": "sil"
+        }
+      ]
+    }
+  ]
+}
