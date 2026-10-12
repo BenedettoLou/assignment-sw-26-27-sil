@@ -201,21 +201,37 @@ bool SilSystem::try_read(const Ecu ecu, Frame& frame) {
 }
 
 void SilSystem::write(const Ecu ecu, const Frame& frame) {
-  // TODO(candidate): protect both queues with state.mutex. Every ECU frame
-  // goes to state.emitted. A frame written by the SMU must also be copied to
-  // state.ebs_input. Keep both queues bounded by kQueueCapacity, then notify
-  // waiting test code through state.emitted_available.
-  (void)ecu;
-  (void)frame;
 
   std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+
+  // emitted list
+  if (impl_ -> state.emitted.size() >= kQueueCapacity){ impl_ -> state.emitted.pop_front(); }
+
+  impl_ -> state.emitted.push_back(frame);
+
+  // SMU ebs list
+  if ( ecu == Ecu::Smu ) {
+
+    if (impl_ -> state.ebs_input.size() >= kQueueCapacity){ impl_ -> state.ebs_input.pop_front(); }
+    impl_ -> state.ebs_input.push_back(frame);
+
+  }
+
+  // freeing the resource before notifying (was causing an error)
+  lock.unlock();
+  impl_ -> state.emitted_available.notify_one();
 }
 
+/*
+ * reminder: ECU for?
+ * */
 void SilSystem::write_output(const Ecu /*ecu*/, const OutputId id,
                              const std::uint16_t value) {
-  // TODO(candidate): protect state.outputs with state.mutex and store value.
-  (void)id;
-  (void)value;
+
+
+  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+
+  impl_ -> state.outputs[output_index(id)] = value;
 }
 
 namespace ecu_io {
