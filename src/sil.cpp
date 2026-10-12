@@ -1,5 +1,8 @@
 #include "sil.hpp"
 
+// added for debugs
+#include <iostream>
+
 #include <atomic>
 #include <array>
 #include <chrono>
@@ -60,6 +63,8 @@ bool SilSystem::start() {
   smu::reset();
   ebs::reset();
 
+  // start of the 2 threads
+  // SMU thread
   impl_->smu_thread = std::thread([this] {
     auto next = std::chrono::steady_clock::now();
     while (!impl_->stop_requested.load()) {
@@ -69,6 +74,7 @@ bool SilSystem::start() {
     }
   });
 
+  // EBS thread
   impl_->ebs_thread = std::thread([this] {
     auto next = std::chrono::steady_clock::now();
     while (!impl_->stop_requested.load()) {
@@ -100,18 +106,24 @@ void SilSystem::stop() {
 
 bool SilSystem::running() const { return impl_->running.load(); }
 
+
 void SilSystem::set_sensor(const SensorId id, const std::uint16_t value) {
-  // TODO(candidate): protect state.sensors with state.mutex and store value.
-  // SensorId::Count is not a valid sensor and does not need to be accepted.
-  (void)id;
-  (void)value;
+
+  const auto index = static_cast<std::size_t>(id);
+
+  //locking resource with mutex
+  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
+
+  impl_->state.sensors[index] = value;
+
 }
 
 std::uint16_t SilSystem::output(const OutputId id) const {
-  // TODO(candidate): protect state.outputs with state.mutex and return the
-  // requested value.
-  (void)id;
-  return 0U;
+  
+  //lock
+  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
+
+  return impl_ -> state.outputs[static_cast<size_t> (id)];
 }
 
 void SilSystem::send_frame(const Frame& frame) {
