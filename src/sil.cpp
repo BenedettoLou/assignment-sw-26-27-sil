@@ -109,54 +109,95 @@ bool SilSystem::running() const { return impl_->running.load(); }
 
 void SilSystem::set_sensor(const SensorId id, const std::uint16_t value) {
 
-  const auto index = static_cast<std::size_t>(id);
-
   //locking resource with mutex
   std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
 
-  impl_->state.sensors[index] = value;
+  impl_->state.sensors[sensor_index(id)] = value;
 
 }
 
 std::uint16_t SilSystem::output(const OutputId id) const {
   
   //lock
-  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
+  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
 
-  return impl_ -> state.outputs[static_cast<size_t> (id)];
+  return impl_ -> state.outputs[output_index(id)];
 }
 
 void SilSystem::send_frame(const Frame& frame) {
-  // TODO(candidate): protect state.ebs_input with state.mutex and enqueue the
-  // frame. If the queue reaches kQueueCapacity, discard the oldest input
-  // before adding the new one.
-  (void)frame;
+
+  //lock
+  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+
+  if ( impl_ -> state.ebs_input.size() >= kQueueCapacity ) {
+    impl_ -> state.ebs_input.pop_front(); //follow FIFO rules 
+					  //discarding the data
+
+  }
+  
+  impl_ -> state.ebs_input.push_back(frame); //FIFO
+					     //adding the data
+
 }
 
 bool SilSystem::receive_frame(Frame& frame,
-                              const std::chrono::milliseconds timeout) {
-  // TODO(candidate): acquire state.mutex with a std::unique_lock and wait on
-  // state.emitted_available until state.emitted is non-empty or timeout
-  // expires. On success, move the oldest frame to frame.
-  (void)frame;
-  (void)timeout;
-  return false;
+                              const std::chrono::milliseconds timeout) { 
+
+  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+
+
+  if (impl_ -> state.emitted_available.wait_for(
+	lock, timeout, 
+	  [this] {
+	    return !impl_ -> state.emitted.empty(); // checking emptiness of the Q 
+	  }
+	)
+
+      ) 
+   {
+    //success case
+    
+    frame = impl_ -> state.emitted.front();
+    impl_ -> state.emitted.pop_front();
+
+    return true;
+
+   } else{
+
+     return false; // failed case
+   }
+
+  
 }
 
 std::uint16_t SilSystem::read_sensor(const SensorId id) const {
-  // TODO(candidate): protect state.sensors with state.mutex and return the
-  // requested value.
-  (void)id;
-  return 0U;
+ 
+  // check if going out of bounds
+  if (sensor_index(id) >= static_cast<std::size_t>(SensorId::Count)){
+    std::cerr << "DBUG - error in reading sensor\n";
+    return 0U;
+  }
+
+  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+  return impl_ -> state.sensors[sensor_index(id)];
 }
 
 bool SilSystem::try_read(const Ecu ecu, Frame& frame) {
-  // TODO(candidate): protect state.ebs_input with state.mutex. Only Ecu::Ebs
-  // has an input queue in this exercise. If it is empty, return false;
-  // otherwise pop its oldest frame.
-  (void)ecu;
-  (void)frame;
-  return false;
+   
+  // check if its the right type of ECU
+  if (ecu != Ecu::Ebs ){
+    return false;
+  }
+
+  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+  if ( impl_ -> state.ebs_input.empty()){
+    return false;
+  }
+  else{
+    frame = impl_->state.ebs_input.front();
+    impl_->state.ebs_input.pop_front();
+    return true;
+  }
 }
 
 void SilSystem::write(const Ecu ecu, const Frame& frame) {
@@ -166,6 +207,8 @@ void SilSystem::write(const Ecu ecu, const Frame& frame) {
   // waiting test code through state.emitted_available.
   (void)ecu;
   (void)frame;
+
+  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
 }
 
 void SilSystem::write_output(const Ecu /*ecu*/, const OutputId id,
