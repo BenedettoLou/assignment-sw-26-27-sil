@@ -209,6 +209,7 @@ void test_ebs_requires_ready_to_drive(TestContext& context) {
   system.stop();
 }
 
+
 void test_ebs_brake_request(TestContext& context) {
   SilSystem system;
   configure_nominal_inputs(system);
@@ -233,6 +234,108 @@ void test_ebs_brake_request(TestContext& context) {
   system.stop();
 }
 
+// Added tests
+
+//nominal APP and brake values produce the expected frame and outputs
+void test_app_brake(TestContext& context){
+
+  SilSystem system;
+  configure_nominal_inputs(system);
+  system.set_sensor(SensorId::SmuApps1Raw, 3500U);
+  system.set_sensor(SensorId::SmuApps2Raw, 3000U);
+  system.set_sensor(SensorId::SmuBrakeRaw, 2500U);
+  system.start();
+
+  Frame frame{};
+  const bool received = wait_for_frame(system, raceup::sil::can_id::SmuSense, frame);
+  context.expect(received, "SMU frame: exist");
+
+  if (received) {
+    context.expect(frame.dlc == 3U, "SMU sense frame has DLC == 3");
+    context.expect(frame.data[0] == 50U,"SMU frame on 0: 50% THROTTLE");
+    context.expect(frame.data[1] == 50U, "SMU frame on 1: 50% BRAKE");
+    context.expect(frame.data[2] == 0U, "SMU frame on 2: NO FAULT");
+
+    // percentages
+    context.expect(system.output(OutputId::SmuThrottlePercent) == 50U, "SMU throttle actuator output matches 50%");
+    context.expect(system.output(OutputId::SmuBrakePercent) == 50U,"SMU brake actuator output matches 50%");
+  }
+  system.stop();
+}
+
+// an APP track short inhibits throttle
+void test_track_ini_throttle(TestContext& context){
+  SilSystem system;
+  configure_nominal_inputs(system);
+
+  // simulating the track short and closing the gap between the two sensors <50
+  system.set_sensor(SensorId::SmuApps1Raw, 3500U);
+  system.set_sensor(SensorId::SmuApps2Raw, 3492U);
+
+  system.start();
+
+  Frame frame{};
+  const bool received = wait_for_frame(system, raceup::sil::can_id::SmuSense, frame);
+
+  if (received){
+
+    // if it checks for the bytes of the frame:
+    // the first must be 0U (error)
+    
+    context.expect(frame.data[0] == 0U, "Throttle inibition");
+
+    // the third must be 1U beacuse AppsTracksShorted = 1U,
+    context.expect(frame.data[2] == 1U, "track shorted");
+  }
+
+  system.stop();
+}
+
+//an APP plausibility disagreement inhibits throttle
+void test_plaus_throttle(TestContext& context){
+  
+  SilSystem system;
+  // plausibility disagreement -> Fault 2U difference >50 
+  
+  system.set_sensor(SensorId::SmuApps1Raw, 3500U);
+  system.set_sensor(SensorId::SmuApps2Raw, 4000U);
+  system.start();
+
+  Frame frame{};
+  const bool received = wait_for_frame( system, raceup::sil::can_id::SmuSense, frame);
+
+  if (received){
+    context.expect(frame.data[2] == 2U, "Plausability error");
+  }
+  system.stop();
+}
+
+// recovery from a live APP fault restores throttle when the inputs are valid;
+void test_recovery_live_APPfault(TestContext& context){
+  SilSystem system;
+
+  system.start();
+  //TODO
+  system.stop();
+}
+
+// EBS tests
+//
+
+//ready-to-drive must be required even when manual mission is set
+void test_rtd_on_manual(TestContext& context){
+  SilSystem system;
+
+  system.start();
+  Frame frame{};
+  const bool received = wait_for_frame( system, raceup::sil::can_id::VehicleStatus, frame);
+  if (received){
+    //TODO
+  }
+
+
+  system.stop();
+}
 }  // namespace
 
 int main() {
@@ -243,6 +346,13 @@ int main() {
   test_ebs_nominal_and_stale_input(context);
   test_ebs_requires_ready_to_drive(context);
   test_ebs_brake_request(context);
+  
+  test_app_brake(context);
+  test_track_ini_throttle(context);
+  test_plaus_throttle(context);
+  test_rtd_on_manual(context);
+  //TODO
+  test_recovery_live_APPfault(context);
 
   if (context.failures != 0) {
     std::printf("%d test assertion(s) failed\n", context.failures);
