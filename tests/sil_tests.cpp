@@ -359,17 +359,34 @@ void test_crit_safe_state(TestContext& context) {
 //ready-to-drive must be required even when manual mission is set
 void test_rtd_on_manual(TestContext& context){
   SilSystem system;
+  configure_nominal_inputs(system);
+  // SENDING FRAMES
+  // vehicle_status
+  system.send_frame(vehicle_status(true, false, 0U));
+  // ebs comm frame
+  system.send_frame(ebs_command(false, false));
+  // brake press frame
+  system.send_frame(brake_pressure(40U, 40U, 8U, 8U));
 
   system.start();
-  Frame frame{};
-  const bool received = wait_for_frame( system, raceup::sil::can_id::VehicleStatus, frame);
-  if (received){
-    //TODO
-  }
-  (void) context;
 
+  // delay, it was bugging
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  // safe state
+  context.expect(system.output(OutputId::EbsAsNodeClosed) == 0U, "ASNode closed, so its not able to go (safe state)");
+  context.expect(system.output(OutputId::EbsValve1Engaged) == 1U && system.output(OutputId::EbsValve2Engaged) == 1U,
+      "EBS both valves without rtd");
+
+  //sending frame to turn to true
+  system.send_frame(vehicle_status(true, true, 0U));
+
+  // delay, it was bugging
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  context.expect(system.output(OutputId::EbsAsNodeClosed) == 1U, "ASNode open");
+  context.expect(system.output(OutputId::EbsValve1Engaged) == 0U && system.output(OutputId::EbsValve2Engaged) == 0U,
+      "EBS both valves without rtd");
   system.stop();
-}
+  }
 }  // namespace
 
 int main() {
