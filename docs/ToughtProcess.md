@@ -15,4 +15,4 @@ Every transmitted frame get copied also into the emitted section so the tester c
 To all the `deque`s have been applied a FIFO logic (First In, First Out).
 
 ## Testing and CI workflow TODO
-Working on...
+All the test have been added at the end. All of them uses only the "public" output of the simulator, not the private in the ECUs.

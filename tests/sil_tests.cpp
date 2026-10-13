@@ -316,11 +316,45 @@ void test_recovery_live_APPfault(TestContext& context){
 
   system.start();
   //TODO
+  //
+  (void) context;
   system.stop();
 }
 
 // EBS tests
 //
+
+// Missing critical inputs result in the safe state
+void test_crit_safe_state(TestContext& context) {
+  SilSystem system;
+
+  system.set_sensor(SensorId::EbsValvesPowered, 1U);
+  system.set_sensor(SensorId::EbsAsmsActive, 1U);
+  system.set_sensor(SensorId::EbsWatchdogHealthy, 1U);
+
+  system.start();
+
+  Frame frame{};
+  const bool received = wait_for_frame(system, raceup::sil::can_id::EbsStatus, frame);
+
+  if (received) {
+    // In safe state:
+    // ASNode is OPEN (0U) 
+    context.expect(frame.data[0] == 0U, "EBS keeps ASNode OPEN when inputs are missing");
+
+    context.expect(frame.data[1] == 1U, "EBS engages Valve 1 when inputs are missing");
+    context.expect(frame.data[2] == 1U, "EBS engages Valve 2 when inputs are missing");
+
+    context.expect(frame.data[3] == 1U, "EBS reports Communication fault code");
+  }
+
+  context.expect(system.output(OutputId::EbsAsNodeClosed) == 0U, "ASNode output pin is open");
+  context.expect(system.output(OutputId::EbsValve1Engaged) == 1U && system.output(OutputId::EbsValve2Engaged) == 1U,
+      "Both valve output pins are engaged");
+
+  system.stop();
+}
+
 
 //ready-to-drive must be required even when manual mission is set
 void test_rtd_on_manual(TestContext& context){
@@ -332,7 +366,7 @@ void test_rtd_on_manual(TestContext& context){
   if (received){
     //TODO
   }
-
+  (void) context;
 
   system.stop();
 }
@@ -351,6 +385,7 @@ int main() {
   test_track_ini_throttle(context);
   test_plaus_throttle(context);
   test_rtd_on_manual(context);
+  test_crit_safe_state(context);
   //TODO
   test_recovery_live_APPfault(context);
 
