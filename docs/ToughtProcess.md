@@ -8,7 +8,7 @@ _i mainly programmed in C in the past and never c++, so sometimes i maybe tend t
 
 ## Synchronization & Concurrency Model
 
-I made the concurrency model so that it prioritizes not having seg faults or corruption of datas, using mutex as requested but also a wrapper like `std::unique_lock` to prevent lock leaks and in case of future update or new features.
+I made the concurrency model so that it prioritizes not having seg faults or corruption of datas, using mutex as requested but also a wrapper like `std::unique_lock` and `std::lock_guard` to prevent lock leaks. 
 
 Every transmitted frame get copied also into the emitted section so the tester can read a pure "log" of all the datas that has been sent trough the CAN.
 

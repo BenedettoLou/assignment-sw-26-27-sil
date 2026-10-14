@@ -127,7 +127,8 @@ std::uint16_t SilSystem::output(const OutputId id) const {
 void SilSystem::send_frame(const Frame& frame) {
 
   //lock
-  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+  
+  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
 
   if ( impl_ -> state.ebs_input.size() >= kQueueCapacity ) {
     impl_ -> state.ebs_input.pop_front(); //follow FIFO rules 
@@ -178,7 +179,8 @@ std::uint16_t SilSystem::read_sensor(const SensorId id) const {
     return 0U;
   }
 
-  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+  
+  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
   return impl_ -> state.sensors[sensor_index(id)];
 }
 
@@ -189,7 +191,7 @@ bool SilSystem::try_read(const Ecu ecu, Frame& frame) {
     return false;
   }
 
-  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
   if ( impl_ -> state.ebs_input.empty()){
     return false;
   }
@@ -202,7 +204,7 @@ bool SilSystem::try_read(const Ecu ecu, Frame& frame) {
 
 void SilSystem::write(const Ecu ecu, const Frame& frame) {
 
-  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
 
   // emitted list
   if (impl_ -> state.emitted.size() >= kQueueCapacity){ impl_ -> state.emitted.pop_front(); }
@@ -217,8 +219,6 @@ void SilSystem::write(const Ecu ecu, const Frame& frame) {
 
   }
 
-  // freeing the resource before notifying (was causing an error)
-  lock.unlock();
   impl_ -> state.emitted_available.notify_one();
 }
 
@@ -229,7 +229,7 @@ void SilSystem::write_output(const Ecu /*ecu*/, const OutputId id,
                              const std::uint16_t value) {
 
 
-  std::unique_lock<std::mutex> lock(impl_ -> state.mutex);
+  std::lock_guard<std::mutex> lock(impl_ -> state.mutex);
 
   impl_ -> state.outputs[output_index(id)] = value;
 }
